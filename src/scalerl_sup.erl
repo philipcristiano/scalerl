@@ -8,5 +8,10 @@ start_link() ->
 	supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-	Procs = [],
+    API = kuberlnetes:load(),
+    Procs = [
+        #{id    => scalerl_deployment_watcher,
+          start => {scalerl_deployment_watcher, start_link, [API]}
+        }
+    ],
 	{ok, {{one_for_one, 1, 5}, Procs}}.
