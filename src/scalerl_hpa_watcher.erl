@@ -5,7 +5,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
--module(scalerl_deployment_watcher).
+-module(scalerl_hpa_watcher).
 -compile({parse_transform, lager_transform}).
 
 -behaviour(gen_server).
@@ -53,10 +53,10 @@ start_link(Args) ->
 %% @end
 %%--------------------------------------------------------------------
 init(API) ->
-    lager:info("Deployment watcher starting"),
+    lager:info("HPA watcher starting"),
     Self = self(),
     Callback = fun({Type, Obj}) -> Self ! {kubewatch, Type, Obj} end,
-    Pid = kuberlnetes:spawn_watch(Callback, API, "listAppsV1DeploymentForAllNamespaces", []),
+    Pid = kuberlnetes:spawn_watch(Callback, API, "listAutoscalingV1HorizontalPodAutoscalerForAllNamespaces", []),
     {ok, #state{api=API, pid=Pid}}.
 
 %%--------------------------------------------------------------------
@@ -103,7 +103,7 @@ handle_cast(_Msg, State) ->
 handle_info({kubewatch, Type, Object}, State) ->
     Metadata = maps:get(<<"metadata">>, Object),
     Name = maps:get(<<"name">>, Metadata),
-    io:format("Deployment ~p ~p~n", [Type, Name]),
+    io:format("HPA ~p ~p~n", [Type, Name]),
     {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
