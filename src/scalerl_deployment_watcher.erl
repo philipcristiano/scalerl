@@ -100,10 +100,11 @@ handle_cast(_Msg, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_info({kubewatch, Type, Object}, State) ->
+handle_info({kubewatch, _Type, Object}, State) ->
     Metadata = maps:get(<<"metadata">>, Object),
-    Name = maps:get(<<"name">>, Metadata),
-    io:format("Deployment ~p ~p~n", [Type, Name]),
+    Annotations = maps:get(<<"annotations">>, Metadata, #{}),
+    ScalerlEnabled = maps:get(<<"scalerl">>, Annotations, "disable"),
+    ensure_scalerl_hpa(Metadata, ScalerlEnabled),
     {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -136,3 +137,13 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+ensure_scalerl_hpa(Metadata, <<"enable">>) ->
+    Namespace = maps:get(<<"namespace">>, Metadata),
+    Name = maps:get(<<"name">>, Metadata),
+    lager:info("~p/~p deployment should be enabled for Scalerl~n", [Namespace, Name]);
+ensure_scalerl_hpa(Metadata, _) ->
+    Namespace = maps:get(<<"namespace">>, Metadata),
+    Name = maps:get(<<"name">>, Metadata),
+    lager:info("~p/~p deployment not enabled for Scalerl~n", [Namespace, Name]),
+    ok.
