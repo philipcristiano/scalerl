@@ -5,7 +5,7 @@ PROJECT_VERSION = 0.1.0
 DEPS = swaggerl kuberlnetes lager
 SHELL_DEPS = sync
 
-dep_swaggerl = git git@github.com:philipcristiano/swaggerl.git post
+dep_swaggerl = git git@github.com:philipcristiano/swaggerl.git master
 dep_kuberlnetes = git git@github.com:philipcristiano/kuberlnetes.git actions
 dep_sync = git https://github.com/rustyio/sync.git master
 
