@@ -53,7 +53,7 @@ start_link(Args) ->
 %% @end
 %%--------------------------------------------------------------------
 init(API) ->
-    lager:info("Deployment watcher starting"),
+    ok = lager:info("Deployment watcher starting"),
     Self = self(),
     Callback = fun({Type, Obj}) -> Self ! {kubewatch, Type, Obj} end,
     Pid = kuberlnetes:spawn_watch(
@@ -142,7 +142,7 @@ code_change(_OldVsn, State, _Extra) ->
 ensure_scalerl_hpa(Metadata, <<"enable">>, State = #state{api=API}) ->
     Namespace = maps:get(<<"namespace">>, Metadata),
     Name = maps:get(<<"name">>, Metadata),
-    lager:info(
+    ok = lager:info(
         "~p/~p deployment should be enabled for Scalerl~n", [Namespace, Name]),
     HPADoc = hpa(Name, Metadata),
     _Resp = swaggerl:op(
@@ -150,12 +150,13 @@ ensure_scalerl_hpa(Metadata, <<"enable">>, State = #state{api=API}) ->
         <<"createAutoscalingV2beta2NamespacedHorizontalPodAutoscaler">>,
         [{"body", HPADoc},
          {"namespace", Namespace}]),
-    lager:info("~p/~p deployment: created HPA~n", [Namespace, Name]),
+    ok = lager:info("~p/~p deployment: created HPA~n", [Namespace, Name]),
     State;
 ensure_scalerl_hpa(Metadata, _, State) ->
     Namespace = maps:get(<<"namespace">>, Metadata),
     Name = maps:get(<<"name">>, Metadata),
-    lager:info("~p/~p deployment not enabled for Scalerl~n", [Namespace, Name]),
+    ok = lager:info(
+        "~p/~p deployment not enabled for Scalerl~n", [Namespace, Name]),
     State.
 
 

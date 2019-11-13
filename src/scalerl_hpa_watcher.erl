@@ -53,7 +53,7 @@ start_link(Args) ->
 %% @end
 %%--------------------------------------------------------------------
 init(API) ->
-    lager:info("HPA watcher starting"),
+    ok = lager:info("HPA watcher starting"),
     Self = self(),
     Callback = fun({Type, Obj}) -> Self ! {kubewatch, Type, Obj} end,
     Pid = kuberlnetes:spawn_watch(
