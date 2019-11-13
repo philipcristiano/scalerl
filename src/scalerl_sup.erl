@@ -5,7 +5,7 @@
 -export([init/1]).
 
 start_link() ->
-	supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+  supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
     API = kuberlnetes:load(),
@@ -17,4 +17,4 @@ init([]) ->
           start => {scalerl_hpa_watcher, start_link, [API]}
         }
     ],
-	{ok, {{one_for_one, 1, 5}, Procs}}.
+  {ok, {{one_for_one, 1, 5}, Procs}}.

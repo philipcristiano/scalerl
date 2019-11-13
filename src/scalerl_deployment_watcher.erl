@@ -56,7 +56,8 @@ init(API) ->
     lager:info("Deployment watcher starting"),
     Self = self(),
     Callback = fun({Type, Obj}) -> Self ! {kubewatch, Type, Obj} end,
-    Pid = kuberlnetes:spawn_watch(Callback, API, "listAppsV1DeploymentForAllNamespaces", []),
+    Pid = kuberlnetes:spawn_watch(
+        Callback, API, "listAppsV1DeploymentForAllNamespaces", []),
     {ok, #state{api=API, pid=Pid}}.
 
 %%--------------------------------------------------------------------
@@ -104,8 +105,8 @@ handle_info({kubewatch, _Type, Object}, State) ->
     Metadata = maps:get(<<"metadata">>, Object),
     Annotations = maps:get(<<"annotations">>, Metadata, #{}),
     ScalerlEnabled = maps:get(<<"scalerl">>, Annotations, "disable"),
-    ensure_scalerl_hpa(Metadata, ScalerlEnabled),
-    {noreply, State};
+    State1 = ensure_scalerl_hpa(Metadata, ScalerlEnabled, State),
+    {noreply, State1};
 handle_info(_Info, State) ->
     {noreply, State}.
 
