@@ -1,0 +1,25 @@
+name: Erlang CI
+
+on: [push]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    container:
+      image: erlang:21
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Compile
+      run: make deps app
+      env:
+        GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no"
+    - name: elvis
+      run: make elvis
+    - name: Run tests
+      run: make tests
+    - name: Dialyze
+      run: make dialyze

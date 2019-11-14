@@ -53,10 +53,15 @@ start_link(Args) ->
 %% @end
 %%--------------------------------------------------------------------
 init(API) ->
-    lager:info("HPA watcher starting"),
+    ok = lager:info("HPA watcher starting"),
     Self = self(),
     Callback = fun({Type, Obj}) -> Self ! {kubewatch, Type, Obj} end,
-    Pid = kuberlnetes:spawn_watch(Callback, API, "listAutoscalingV1HorizontalPodAutoscalerForAllNamespaces", []),
+    Pid = kuberlnetes:spawn_watch(
+      Callback,
+      API,
+      "listAutoscalingV1HorizontalPodAutoscalerForAllNamespaces",
+      []
+    ),
     {ok, #state{api=API, pid=Pid}}.
 
 %%--------------------------------------------------------------------
@@ -100,10 +105,9 @@ handle_cast(_Msg, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_info({kubewatch, Type, Object}, State) ->
-    Metadata = maps:get(<<"metadata">>, Object),
-    Name = maps:get(<<"name">>, Metadata),
-    io:format("HPA ~p ~p~n", [Type, Name]),
+handle_info({kubewatch, _Type, _Object}, State) ->
+    % Metadata = maps:get(<<"metadata">>, Object),
+    % Name = maps:get(<<"name">>, Metadata),
     {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.

@@ -53,10 +53,11 @@ start_link(Args) ->
 %% @end
 %%--------------------------------------------------------------------
 init(API) ->
-    lager:info("Deployment watcher starting"),
+    ok = lager:info("Deployment watcher starting"),
     Self = self(),
     Callback = fun({Type, Obj}) -> Self ! {kubewatch, Type, Obj} end,
-    Pid = kuberlnetes:spawn_watch(Callback, API, "listAppsV1DeploymentForAllNamespaces", []),
+    Pid = kuberlnetes:spawn_watch(
+        Callback, API, "listAppsV1DeploymentForAllNamespaces", []),
     {ok, #state{api=API, pid=Pid}}.
 
 %%--------------------------------------------------------------------
@@ -104,8 +105,8 @@ handle_info({kubewatch, _Type, Object}, State) ->
     Metadata = maps:get(<<"metadata">>, Object),
     Annotations = maps:get(<<"annotations">>, Metadata, #{}),
     ScalerlEnabled = maps:get(<<"scalerl">>, Annotations, "disable"),
-    ensure_scalerl_hpa(Metadata, ScalerlEnabled),
-    {noreply, State};
+    State1 = ensure_scalerl_hpa(Metadata, ScalerlEnabled, State),
+    {noreply, State1};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -138,12 +139,52 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-ensure_scalerl_hpa(Metadata, <<"enable">>) ->
+ensure_scalerl_hpa(Metadata, <<"enable">>, State = #state{api=API}) ->
     Namespace = maps:get(<<"namespace">>, Metadata),
     Name = maps:get(<<"name">>, Metadata),
-    lager:info("~p/~p deployment should be enabled for Scalerl~n", [Namespace, Name]);
-ensure_scalerl_hpa(Metadata, _) ->
+    ok = lager:info(
+        "~p/~p deployment should be enabled for Scalerl~n", [Namespace, Name]),
+    HPADoc = hpa(Name, Metadata),
+    _Resp = swaggerl:op(
+        API,
+        <<"createAutoscalingV2beta2NamespacedHorizontalPodAutoscaler">>,
+        [{"body", HPADoc},
+         {"namespace", Namespace}]),
+    ok = lager:info("~p/~p deployment: created HPA~n", [Namespace, Name]),
+    State;
+ensure_scalerl_hpa(Metadata, _, State) ->
     Namespace = maps:get(<<"namespace">>, Metadata),
     Name = maps:get(<<"name">>, Metadata),
-    lager:info("~p/~p deployment not enabled for Scalerl~n", [Namespace, Name]),
-    ok.
+    ok = lager:info(
+        "~p/~p deployment not enabled for Scalerl~n", [Namespace, Name]),
+    State.
+
+
+hpa(Deployment, _Metadata) ->
+    #{<<"apiVersion">> => <<"autoscaling/v2beta2">>,
+      <<"kind">> => <<"HorizontalPodAutoscaler">>,
+      <<"metadata">> => #{
+        <<"name">> => Deployment,
+        <<"annotations">> => #{
+            <<"scalerl">> => <<"enable">>
+        }
+      },
+      <<"spec">> => #{
+        <<"scaleTargetRef">> => #{
+          <<"apiVersion">> => <<"apps/v1">>,
+          <<"kind">> => <<"Deployment">>,
+          <<"name">> => Deployment
+      },
+        <<"minReplicas">> => 1,
+        <<"maxReplicas">> => 10,
+        <<"metrics">> => [
+          #{<<"type">> => <<"Resource">>,
+            <<"resource">> => #{
+              <<"name">> => <<"cpu">>,
+              <<"target">> => #{
+                <<"type">> => <<"Utilization">>,
+                <<"averageUtilization">> => 50
+              }
+           }
+       }]
+    }}.
