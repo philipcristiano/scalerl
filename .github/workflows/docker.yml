@@ -11,6 +11,12 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+      run: |
+        docker login docker.pkg.github.com --username "${ORG}" --password "${GITHUB_TOKEN}"
+        TAG=docker.pkg.github.com/philipcristiano/scalerl/scalerl:$(date +%s)
+        docker build . --file Dockerfile --tag $TAG
+        docker push $TAG
       env:
+        ORG: philipcristiano
         GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no"
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
