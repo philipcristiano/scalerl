@@ -20,3 +20,5 @@ COPY --from=builder /app/src/_rel/scalerl_release/scalerl_release-1.tar.gz /app.
 WORKDIR /app
 
 RUN tar -xzf /app.tar
+
+CMD ["/app/bin/scalerl_release", "foreground"]
