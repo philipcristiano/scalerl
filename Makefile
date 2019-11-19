@@ -7,7 +7,7 @@ DEPS = swaggerl kuberlnetes lager
 SHELL_DEPS = sync
 
 dep_elvis_mk = git https://github.com/inaka/elvis.mk.git 1.0.0
-dep_swaggerl = git https://github.com/philipcristiano/swaggerl.git master
+dep_swaggerl = git https://github.com/philipcristiano/swaggerl.git in-cluster
 dep_kuberlnetes = git https://github.com/philipcristiano/kuberlnetes.git actions
 dep_sync = git https://github.com/rustyio/sync.git master
 
