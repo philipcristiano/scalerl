@@ -6,12 +6,23 @@ metadata:
   # "namespace" omitted since ClusterRoles are not namespaced
   name: scalerl
 rules:
-- apiGroups: ["watcher"]
-  resources: ["deployments", "hpas"]
-  verbs: ["get", "watch", "list"]
-- apiGroups: ["writer"]
-  resources: ["hpas"]
-  verbs: ["create"]
+- apiGroups:
+  - apps
+  - ''
+  resources:
+  - 'deployments'
+  verbs:
+  - list
+  - watch
+  - status
+- apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - list
+  - create
+  - watch
 ---
 apiVersion: v1
 kind: Namespace
@@ -24,7 +35,7 @@ metadata:
   name: scalerl
   namespace: scalerl
 ---
-kind: RoleBinding
+kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: scalerl
@@ -34,16 +45,17 @@ subjects:
   name: scalerl
   namespace: scalerl
 roleRef:
-  kind: Role
+  kind: ClusterRole
   name: scalerl
   apiGroup: rbac.authorization.k8s.io
 ---
-apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: scalerl
   namespace: scalerl
 spec:
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
       app: scalerl
@@ -58,9 +70,14 @@ spec:
       - name: regcred
       containers:
       - name: scalerl
-        image: docker.pkg.github.com/philipcristiano/scalerl/scalerl:1574166939
-        ports:
-        - containerPort: 80
+        image: docker.pkg.github.com/philipcristiano/scalerl/scalerl:1574860728
         resources:
           requests:
             cpu: 75m
+            memory: 1Gi
+          limits:
+            cpu: 1
+            memory: 8Gi
+        env:
+        - name: HOME
+          value: /app
