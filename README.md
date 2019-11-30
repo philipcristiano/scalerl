@@ -21,3 +21,13 @@ metadata:
     scalerl: "enable"
 ...
 ```
+
+
+## Deploying
+
+* Grab a Github personal access token
+  With: *repo *read:packages
+
+* Create you secret to pull the image
+
+* kubectl -n scalerl create secret docker-registry regcred --docker-server=docker.pkg.github.com --docker-username=$GITHUB_USER --docker-password=$GITHUB_TOKEN

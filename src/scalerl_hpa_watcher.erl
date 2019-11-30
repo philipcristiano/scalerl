@@ -6,8 +6,7 @@
 %%%-------------------------------------------------------------------
 
 -module(scalerl_hpa_watcher).
--compile({parse_transform, lager_transform}).
-
+-include_lib("kernel/include/logger.hrl").
 -behaviour(gen_server).
 
 %% API functions
@@ -53,7 +52,7 @@ start_link(Args) ->
 %% @end
 %%--------------------------------------------------------------------
 init(API) ->
-    ok = lager:info("HPA watcher starting"),
+    ?LOG_INFO(#{msg => "HPA watcher starting"}),
     Self = self(),
     Callback = fun({Type, Obj}) -> Self ! {kubewatch, Type, Obj} end,
     Pid = kuberlnetes:spawn_watch(
