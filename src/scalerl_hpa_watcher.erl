@@ -104,10 +104,15 @@ handle_cast(_Msg, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_info({kubewatch, _Type, _Object}, State) ->
-    % Metadata = maps:get(<<"metadata">>, Object),
-    % Name = maps:get(<<"name">>, Metadata),
-    {noreply, State};
+handle_info({kubewatch, _Type, Object}, State) ->
+    Metadata = maps:get(<<"metadata">>, Object),
+
+    Annotations = maps:get(<<"annotations">>, Metadata, #{}),
+    ScalerlEnabled = maps:get(<<"scalerl">>, Annotations, "disable"),
+
+    State1 = watch_hpa(Metadata, ScalerlEnabled, State),
+
+    {noreply, State1};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -139,3 +144,18 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+watch_hpa(Metadata, <<"enable">>, State = #state{}) ->
+    Namespace = maps:get(<<"namespace">>, Metadata),
+    Name = maps:get(<<"name">>, Metadata),
+    ?LOG_INFO(#{what => "HPA should be watched",
+                namespace => Namespace,
+                name => Name}),
+    State;
+watch_hpa(Metadata, _, State = #state{}) ->
+    Namespace = maps:get(<<"namespace">>, Metadata),
+    Name = maps:get(<<"name">>, Metadata),
+    ?LOG_INFO(#{what => "HPA should not be watched",
+                namespace => Namespace,
+                name => Name}),
+    State.
