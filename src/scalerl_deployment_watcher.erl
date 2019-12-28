@@ -154,7 +154,7 @@ ensure_scalerl_hpa(Metadata, <<"enable">>, State = #state{api=API}) ->
                 namespace => Namespace,
                 deployment => Name}),
     State;
-ensure_scalerl_hpa(Metadata, _, State) ->
+ensure_scalerl_hpa(Metadata, _, State = #state{}) ->
     Namespace = maps:get(<<"namespace">>, Metadata),
     Name = maps:get(<<"name">>, Metadata),
     ?LOG_INFO(#{what => "deployment not enabled",

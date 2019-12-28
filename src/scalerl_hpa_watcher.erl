@@ -11,6 +11,7 @@
 
 %% API functions
 -export([start_link/1]).
+-export([update_hpa/1]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -20,7 +21,7 @@
          terminate/2,
          code_change/3]).
 
--record(state, {api, pid}).
+-record(state, {api, pid, hpa_timers}).
 
 %%%===================================================================
 %%% API functions
@@ -61,7 +62,8 @@ init(API) ->
       "listAutoscalingV1HorizontalPodAutoscalerForAllNamespaces",
       []
     ),
-    {ok, #state{api=API, pid=Pid}}.
+    HPATimers = maps:new(),
+    {ok, #state{api=API, pid=Pid, hpa_timers=HPATimers}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -108,8 +110,7 @@ handle_info({kubewatch, _Type, Object}, State) ->
     Metadata = maps:get(<<"metadata">>, Object),
 
     Annotations = maps:get(<<"annotations">>, Metadata, #{}),
-    ScalerlEnabled = maps:get(<<"scalerl">>, Annotations, "disable"),
-
+    ScalerlEnabled = maps:get(<<"scalerl">>, Annotations, "default_disabled"),
     State1 = watch_hpa(Metadata, ScalerlEnabled, State),
 
     {noreply, State1};
@@ -145,17 +146,69 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-watch_hpa(Metadata, <<"enable">>, State = #state{}) ->
+watch_hpa(Metadata, <<"enable">>, State = #state{hpa_timers=HPATimers}) ->
     Namespace = maps:get(<<"namespace">>, Metadata),
     Name = maps:get(<<"name">>, Metadata),
     ?LOG_INFO(#{what => "HPA should be watched",
                 namespace => Namespace,
                 name => Name}),
-    State;
-watch_hpa(Metadata, _, State = #state{}) ->
+    HPATimers1 = ensure_timer(Namespace, Name, HPATimers),
+    State1 = State#state{hpa_timers=HPATimers1},
+    State1;
+watch_hpa(Metadata, Setting, State = #state{hpa_timers=HPATimers}) ->
     Namespace = maps:get(<<"namespace">>, Metadata),
     Name = maps:get(<<"name">>, Metadata),
     ?LOG_INFO(#{what => "HPA should not be watched",
                 namespace => Namespace,
+                name => Name,
+                scalerl_setting => Setting}),
+    HPATimers1 = ensure_timer_removed(Namespace, Name, HPATimers),
+    State1 = State#state{hpa_timers=HPATimers1},
+    State1.
+
+ensure_timer(Namespace, Name, HPATimers) ->
+    PossibleTRef = maps:get({Namespace, Name}, HPATimers, undefined),
+    create_timer(Namespace, Name, HPATimers, PossibleTRef).
+
+ensure_timer_removed(Namespace, Name, HPATimers) ->
+    PossibleTRef = maps:get({Namespace, Name}, HPATimers, undefined),
+    remove_timer(Namespace, Name, HPATimers, PossibleTRef).
+
+create_timer(Namespace, Name, HPATimers, undefined) ->
+    ?LOG_DEBUG(#{msg=>"Creating HPA Timer",
+                 namespace => Namespace,
+                 name => Name}),
+    Seconds = 5,
+    Interval = Seconds * 1000,
+    TRef = timer:apply_interval(Interval,
+                                scalerl_hpa_watcher,
+                                update_hpa,
+                                [{Namespace, Name}]),
+    maps:put({Namespace, Name}, TRef, HPATimers);
+create_timer(_Namespace, _Name, HPATimers, _) ->
+    HPATimers.
+
+remove_timer(_Namespace, _Name, HPATimers, undefined) ->
+    HPATimers;
+remove_timer(Namespace, Name, HPATimers, TRef) ->
+    ?LOG_DEBUG(#{msg=>"Removing HPA Timer",
+                 namespace => Namespace,
+                 name => Name}),
+    {ok, cancel} = timer:cancel(TRef),
+    maps:remove({Namespace, Name}, HPATimers).
+
+update_hpa({Namespace, Name}) ->
+    ?LOG_INFO(#{msg=> "Apply interval update HPA",
+                namespace => Namespace,
                 name => Name}),
-    State.
+    MaxQuery = lists:flatten(["max(kube_hpa_status_current_replicas{hpa=\"",
+                              Name,
+                              "\", namespace=\"",
+                              Namespace,
+                              "\"})"]),
+    Data = prometheus_query:query("http://prometheus.stratobuilder.com",
+      [{query, MaxQuery}]),
+    ?LOG_INFO(#{what => "Prometheus Metrics",
+                data => Data,
+                name => Name}),
+    ok.

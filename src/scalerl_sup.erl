@@ -20,6 +20,9 @@ init([]) ->
     ?LOG_INFO(#{msg=>"Got Kubernetes API Credentials"}),
     ?LOG_INFO(#{api_options=>swaggerl:operations(API)}),
     Procs = [
+        #{id    => scalerl_hpa_updater,
+          start => {scalerl_hpa_updater, start_link, [API]}
+        }
         #{id    => scalerl_deployment_watcher,
           start => {scalerl_deployment_watcher, start_link, [API]}
         },
