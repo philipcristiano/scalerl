@@ -145,11 +145,14 @@ ensure_scalerl_hpa(Metadata, <<"enable">>, State = #state{api=API}) ->
                 namespace => Namespace,
                 deployment => Name}),
     HPADoc = hpa(Name, Metadata),
-    _Resp = swaggerl:op(
+    Resp = swaggerl:op(
         API,
         <<"createAutoscalingV2beta2NamespacedHorizontalPodAutoscaler">>,
         [{"body", HPADoc},
          {"namespace", Namespace}]),
+    %% TODO: Handle already existing autoscaler
+    ?LOG_INFO(#{what =>"swaggerl_op",
+                resp => Resp}),
     ?LOG_INFO(#{what => "created HPA",
                 namespace => Namespace,
                 deployment => Name}),
