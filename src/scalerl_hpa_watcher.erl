@@ -198,17 +198,11 @@ remove_timer(Namespace, Name, HPATimers, TRef) ->
     maps:remove({Namespace, Name}, HPATimers).
 
 update_hpa({Namespace, Name}) ->
+    {ok, {Min, Max}} = prometheus_query:hpa_size(Namespace, Name),
+
     ?LOG_INFO(#{msg=> "Apply interval update HPA",
                 namespace => Namespace,
-                name => Name}),
-    MaxQuery = lists:flatten(["max(kube_hpa_status_current_replicas{hpa=\"",
-                              Name,
-                              "\", namespace=\"",
-                              Namespace,
-                              "\"})"]),
-    Data = prometheus_query:query("http://prometheus.stratobuilder.com",
-      [{query, MaxQuery}]),
-    ?LOG_INFO(#{what => "Prometheus Metrics",
-                data => Data,
+                min => Min,
+                max => Max,
                 name => Name}),
     ok.
