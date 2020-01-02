@@ -8,7 +8,7 @@ LOCAL_DEPS = sasl
 SHELL_DEPS = sync
 
 dep_elvis_mk = git https://github.com/inaka/elvis.mk.git 1.0.0
-dep_swaggerl = git https://github.com/philipcristiano/swaggerl.git v0.0.4
+dep_swaggerl = git https://github.com/philipcristiano/swaggerl.git change-content-type
 dep_kuberlnetes = git https://github.com/philipcristiano/kuberlnetes.git v0.0.2
 dep_sync = git https://github.com/rustyio/sync.git master
 dep_flatlog = git https://github.com/ferd/flatlog.git v0.1.1
