@@ -151,7 +151,7 @@ ensure_scalerl_hpa(Metadata, <<"enable">>, State = #state{api=API}) ->
         [{"body", HPADoc},
          {"namespace", Namespace}]),
     %% TODO: Handle already existing autoscaler
-    ?LOG_INFO(#{what =>"swaggerl_op",
+    ?LOG_DEBUG(#{what =>"swaggerl_op",
                 resp => Resp}),
     ?LOG_INFO(#{what => "created HPA",
                 namespace => Namespace,

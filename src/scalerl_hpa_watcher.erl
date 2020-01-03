@@ -206,9 +206,4 @@ update_hpa({Namespace, Name}) ->
                 max => Max,
                 name => Name}),
     ok = scalerl_hpa_manager:update_hpa(Namespace, Name, {Min, Max}),
-    ?LOG_INFO(#{what=> "Apply interval - HPA Updated",
-                namespace => Namespace,
-                min => Min,
-                max => Max,
-                name => Name}),
     ok.
