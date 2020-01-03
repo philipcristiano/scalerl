@@ -77,12 +77,29 @@ init(API) ->
 %%--------------------------------------------------------------------
 handle_call({update_hpa, Namespace, Name, {Min, Max}},
             _From,
-            State=#state{api=_API}) ->
+            State=#state{api=API}) ->
+    MaxUpdate = Max * 2,
+    MinUpdate = lists:max([1, math:floor(Min * 0.75)]),
     ?LOG_INFO(#{what => "HPA manager should update HPA",
                 namespace => Namespace,
                 name => Name,
                 min => Min,
-                max => Max}),
+                max => Max,
+                min_update => MinUpdate,
+                max_update => MaxUpdate}),
+    HPAUpdateSpec = hpa_scale_update(Namespace, Name, {Min, Max}),
+    RequestOps = [{"body", HPAUpdateSpec},
+                  {"name", Name},
+                  {"namespace", Namespace}],
+    SwaggerlOps = [{content_type, <<"application/strategic-merge-patch+json">>}],
+    Resp = swaggerl:op(API,
+                       <<"patchAutoscalingV1NamespacedHorizontalPodAutoscaler">>,
+                       RequestOps,
+                       SwaggerlOps),
+    ?LOG_INFO(#{what => "HPA Manager Swaggerl Op",
+                namespace => Namespace,
+                name => Name,
+                response => Resp}),
     {reply, ok, State};
 handle_call(_Request, _From, State) ->
     Reply = ok,
@@ -142,3 +159,14 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+hpa_scale_update(Namespace, Name, {Min, Max}) ->
+    #{<<"apiVersion">> => <<"autoscaling/v2beta2">>,
+      <<"kind">> => <<"HorizontalPodAutoscaler">>,
+      <<"metadata">> => #{
+        <<"name">> => Name,
+        <<"namespace">> => Namespace
+      },
+      <<"spec">> => #{
+        <<"minReplicas">> => Min,
+        <<"maxReplicas">> => Max
+    }}.
