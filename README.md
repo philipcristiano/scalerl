@@ -2,7 +2,17 @@
 
 A scale manager for Kubernetes to ensure safe and cost effective HPA configurations
 
-(Currently in development)
+At the moment this is more of a proof-of concept.
+
+Still TODO:
+* HPA target customization
+* Configuration of:
+    * Prometheus location
+    * Starting HPA settings
+    * Re-evaluation frequency
+    * Customizable Prometheus queries
+* Ensure broken `watch` commands are noticed/handled
+* Deal with multiple metric lists for an HPA size (grouping in the query should work)
 
 # Deploying
 
