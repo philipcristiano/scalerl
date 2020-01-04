@@ -144,17 +144,20 @@ ensure_scalerl_hpa(Metadata, <<"enable">>, State = #state{api=API}) ->
     ?LOG_INFO(#{what => "deployment should be enabled for Scalerl",
                 namespace => Namespace,
                 deployment => Name}),
-    HPADoc = hpa(Name, Metadata),
-    _Resp = swaggerl:op(
+    HPADoc = hpa(Namespace, Name, Metadata),
+    Resp = swaggerl:op(
         API,
         <<"createAutoscalingV2beta2NamespacedHorizontalPodAutoscaler">>,
         [{"body", HPADoc},
          {"namespace", Namespace}]),
+    %% TODO: Handle already existing autoscaler
+    ?LOG_DEBUG(#{what =>"swaggerl_op",
+                resp => Resp}),
     ?LOG_INFO(#{what => "created HPA",
                 namespace => Namespace,
                 deployment => Name}),
     State;
-ensure_scalerl_hpa(Metadata, _, State) ->
+ensure_scalerl_hpa(Metadata, _, State = #state{}) ->
     Namespace = maps:get(<<"namespace">>, Metadata),
     Name = maps:get(<<"name">>, Metadata),
     ?LOG_INFO(#{what => "deployment not enabled",
@@ -163,11 +166,13 @@ ensure_scalerl_hpa(Metadata, _, State) ->
     State.
 
 
-hpa(Deployment, _Metadata) ->
+hpa(Namespace, Name, _Metadata) ->
+    % TODO: Use namespace
     #{<<"apiVersion">> => <<"autoscaling/v2beta2">>,
       <<"kind">> => <<"HorizontalPodAutoscaler">>,
       <<"metadata">> => #{
-        <<"name">> => Deployment,
+        <<"name">> => Name,
+        <<"namespace">> => Namespace,
         <<"annotations">> => #{
             <<"scalerl">> => <<"enable">>
         }
@@ -176,7 +181,8 @@ hpa(Deployment, _Metadata) ->
         <<"scaleTargetRef">> => #{
           <<"apiVersion">> => <<"apps/v1">>,
           <<"kind">> => <<"Deployment">>,
-          <<"name">> => Deployment
+          <<"name">> => Name,
+          <<"namespace">> => Namespace
       },
         <<"minReplicas">> => 1,
         <<"maxReplicas">> => 10,

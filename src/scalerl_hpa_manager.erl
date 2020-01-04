@@ -1,17 +1,18 @@
 %%%-------------------------------------------------------------------
-%%% @author philipcristiano
+%%% @author $AUTHOR
+%%% @copyright 2020 $OWNER
 %%% @doc
 %%%
 %%% @end
 %%%-------------------------------------------------------------------
 
--module(scalerl_hpa_watcher).
+-module(scalerl_hpa_manager).
 -include_lib("kernel/include/logger.hrl").
 -behaviour(gen_server).
 
 %% API functions
 -export([start_link/1]).
--export([update_hpa/1]).
+-export([update_hpa/3]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -21,7 +22,7 @@
          terminate/2,
          code_change/3]).
 
--record(state, {api, pid, hpa_timers}).
+-record(state, {api}).
 
 %%%===================================================================
 %%% API functions
@@ -36,6 +37,10 @@
 %%--------------------------------------------------------------------
 start_link(Args) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
+
+update_hpa(Namespace, Name, {Min, Max}) ->
+    ?LOG_INFO(#{what => "called update_hpa"}),
+    gen_server:call(?MODULE, {update_hpa, Namespace, Name, {Min, Max}}).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -53,17 +58,8 @@ start_link(Args) ->
 %% @end
 %%--------------------------------------------------------------------
 init(API) ->
-    ?LOG_INFO(#{msg => "HPA watcher starting"}),
-    Self = self(),
-    Callback = fun({Type, Obj}) -> Self ! {kubewatch, Type, Obj} end,
-    Pid = kuberlnetes:spawn_watch(
-      Callback,
-      API,
-      "listAutoscalingV1HorizontalPodAutoscalerForAllNamespaces",
-      []
-    ),
-    HPATimers = maps:new(),
-    {ok, #state{api=API, pid=Pid, hpa_timers=HPATimers}}.
+    ?LOG_INFO(#{msg => "HPA manager starting"}),
+    {ok, #state{api=API}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -79,6 +75,40 @@ init(API) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_call({update_hpa, Namespace, Name, {Min, Max}},
+            _From,
+            State=#state{api=API}) ->
+    MaxUpdate = Max * 2,
+    MinUpdate = lists:max([1, math:floor(Min * 0.75)]),
+    ?LOG_INFO(#{what => "HPA manager should update HPA",
+                namespace => Namespace,
+                name => Name,
+                min => Min,
+                max => Max,
+                min_update => MinUpdate,
+                max_update => MaxUpdate}),
+    HPAUpdateSpec = hpa_scale_update(Namespace, Name, {Min, Max}),
+    RequestOps = [{"body", HPAUpdateSpec},
+                  {"name", Name},
+                  {"namespace", Namespace}],
+    SwaggerlOps = [{content_type,
+                   <<"application/strategic-merge-patch+json">>}],
+    Resp = swaggerl:op(API,
+        <<"patchAutoscalingV1NamespacedHorizontalPodAutoscaler">>,
+        RequestOps,
+        SwaggerlOps),
+    ?LOG_DEBUG(#{what => "HPA Manager Swaggerl Op",
+                namespace => Namespace,
+                name => Name,
+                response => Resp}),
+    ?LOG_INFO(#{what => "HPA manager updated HPA",
+                namespace => Namespace,
+                name => Name,
+                min => Min,
+                max => Max,
+                min_update => MinUpdate,
+                max_update => MaxUpdate}),
+    {reply, ok, State};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -106,14 +136,6 @@ handle_cast(_Msg, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_info({kubewatch, _Type, Object}, State) ->
-    Metadata = maps:get(<<"metadata">>, Object),
-
-    Annotations = maps:get(<<"annotations">>, Metadata, #{}),
-    ScalerlEnabled = maps:get(<<"scalerl">>, Annotations, "default_disabled"),
-    State1 = watch_hpa(Metadata, ScalerlEnabled, State),
-
-    {noreply, State1};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -145,65 +167,14 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-watch_hpa(Metadata, <<"enable">>, State = #state{hpa_timers=HPATimers}) ->
-    Namespace = maps:get(<<"namespace">>, Metadata),
-    Name = maps:get(<<"name">>, Metadata),
-    ?LOG_INFO(#{what => "HPA should be watched",
-                namespace => Namespace,
-                name => Name}),
-    HPATimers1 = ensure_timer(Namespace, Name, HPATimers),
-    State1 = State#state{hpa_timers=HPATimers1},
-    State1;
-watch_hpa(Metadata, Setting, State = #state{hpa_timers=HPATimers}) ->
-    Namespace = maps:get(<<"namespace">>, Metadata),
-    Name = maps:get(<<"name">>, Metadata),
-    ?LOG_INFO(#{what => "HPA should not be watched",
-                namespace => Namespace,
-                name => Name,
-                scalerl_setting => Setting}),
-    HPATimers1 = ensure_timer_removed(Namespace, Name, HPATimers),
-    State1 = State#state{hpa_timers=HPATimers1},
-    State1.
-
-ensure_timer(Namespace, Name, HPATimers) ->
-    PossibleTRef = maps:get({Namespace, Name}, HPATimers, undefined),
-    create_timer(Namespace, Name, HPATimers, PossibleTRef).
-
-ensure_timer_removed(Namespace, Name, HPATimers) ->
-    PossibleTRef = maps:get({Namespace, Name}, HPATimers, undefined),
-    remove_timer(Namespace, Name, HPATimers, PossibleTRef).
-
-create_timer(Namespace, Name, HPATimers, undefined) ->
-    ?LOG_DEBUG(#{msg=>"Creating HPA Timer",
-                 namespace => Namespace,
-                 name => Name}),
-    Seconds = 5,
-    Interval = Seconds * 1000,
-    TRef = timer:apply_interval(Interval,
-                                scalerl_hpa_watcher,
-                                update_hpa,
-                                [{Namespace, Name}]),
-    maps:put({Namespace, Name}, TRef, HPATimers);
-create_timer(_Namespace, _Name, HPATimers, _) ->
-    HPATimers.
-
-remove_timer(_Namespace, _Name, HPATimers, undefined) ->
-    HPATimers;
-remove_timer(Namespace, Name, HPATimers, TRef) ->
-    ?LOG_DEBUG(#{msg=>"Removing HPA Timer",
-                 namespace => Namespace,
-                 name => Name}),
-    {ok, cancel} = timer:cancel(TRef),
-    maps:remove({Namespace, Name}, HPATimers).
-
-update_hpa({Namespace, Name}) ->
-    {ok, {Min, Max}} = prometheus_query:hpa_size(Namespace, Name),
-
-    ?LOG_INFO(#{msg=> "Apply interval update HPA",
-                namespace => Namespace,
-                min => Min,
-                max => Max,
-                name => Name}),
-    ok = scalerl_hpa_manager:update_hpa(Namespace, Name, {Min, Max}),
-    ok.
+hpa_scale_update(Namespace, Name, {Min, Max}) ->
+    #{<<"apiVersion">> => <<"autoscaling/v2beta2">>,
+      <<"kind">> => <<"HorizontalPodAutoscaler">>,
+      <<"metadata">> => #{
+        <<"name">> => Name,
+        <<"namespace">> => Namespace
+      },
+      <<"spec">> => #{
+        <<"minReplicas">> => Min,
+        <<"maxReplicas">> => Max
+    }}.

@@ -13,13 +13,17 @@ init([]) ->
     Operations = [
         <<"createAutoscalingV2beta2NamespacedHorizontalPodAutoscaler">>,
         <<"listAppsV1DeploymentForAllNamespaces">>,
-        <<"listAutoscalingV1HorizontalPodAutoscalerForAllNamespaces">>
+        <<"listAutoscalingV1HorizontalPodAutoscalerForAllNamespaces">>,
+        <<"patchAutoscalingV1NamespacedHorizontalPodAutoscaler">>
     ],
 
     API = kuberlnetes:load([{operations, Operations}]),
     ?LOG_INFO(#{msg=>"Got Kubernetes API Credentials"}),
     ?LOG_INFO(#{api_options=>swaggerl:operations(API)}),
     Procs = [
+        #{id    => scalerl_hpa_manager,
+          start => {scalerl_hpa_manager, start_link, [API]}
+        },
         #{id    => scalerl_deployment_watcher,
           start => {scalerl_deployment_watcher, start_link, [API]}
         },
